@@ -1,6 +1,6 @@
 import simplepyble
 import keyboard
-
+from functools import partial
 found_device = False
 
 YOUR_ADDRESS = "c0:98:e5:49:aa:bb" # Replace address with your device address
@@ -10,20 +10,24 @@ CHAR_UUIDS = {"up": "c05899c5-457c-4c75-93ab-e55018bb3073",
         "right": "c05899c7-457c-4c75-93ab-e55018bb3073",
         "left": "c05899c8-457c-4c75-93ab-e55018bb3073",
         "led":"32e68911-2b22-4db5-a914-43ce41986c70"}
+LED_off = b'\x00'
+ 
+LED_on = b'\x01'
 
-pressed = {"up": False, "down": False, "right": False, "left": False}
-chars = {"up": None, "down": None, "right": None, "left": None, "led": None}
-
-peripheral= []
+peripherals= []
 service_uuid = [] 
 characteristic_uuid = []
 class RobotController():
     def __init__(self, address):
 
         adapters = simplepyble.Adapter.get_adapters()
-        keyboard.hook(self.on_key_event)
+        
         found_device = False
         connect_device = False
+        
+        self.pressed = {"up": False, "down": False, "right": False, "left": False}
+        self.chars = {"up": None, "down": None, "right": None, "left": None, "led": None}
+
         
         
         
@@ -45,23 +49,23 @@ class RobotController():
         adapter.set_callback_on_scan_stop(lambda: print("Scan complete.\n"))
         adapter.set_callback_on_scan_found(lambda peripheral: print(f"Found {peripheral.identifier()} [{peripheral.address()}]"))
         # adapter.set_callback_on_scan_found(lambda peripheral: print(f"Found a peripheral {peripheral.identifier()}"))
-
+        
         # Scan for 5 seconds
         adapter.scan_for(5000)
-        peripherals = adapter.scan_get_results()
-
+        peripherals.append(adapter.scan_get_results())
+        
         # Query the user to pick a peripheral
         print("Selecting the Peripheral from the Provided Address")
-        for i, peripheral in enumerate(peripherals):
+        for i, peripheral in enumerate(peripherals[0]):
             print(f"{i}: {peripheral.identifier()} [{peripheral.address()}]")            
             if peripheral.identifier()=="LAB11":
                 found_device = True
                 connect_device = True
-                peripheral=peripherals[i]
-                print(f"Connecting to: {peripheral.identifier()} [{peripheral.address()}]")
-                peripheral.connect()
+                self.peripheral=peripherals[0][i]
+                print(f"Connecting to: {self.peripheral.identifier()} [{self.peripheral.address()}]")
+                self.peripheral.connect()
                 print("Successfully connected, listing services...")
-                services = peripheral.services()
+                services = self.peripheral.services()
                 service_characteristic_pair = []
                 for service in services:
                     for characteristic in service.characteristics():
@@ -71,17 +75,23 @@ class RobotController():
                     print(f"{i}: {service_uuid} {characteristic}")
                 
                     if service_uuid in SERVICE_UUID:#== "32e61089-2b22-4db5-a914-43ce41986c70":
-                        service_uuid, characteristic_uuid = service_characteristic_pair[i]    
+                        self.service_uuid, self.characteristic_uuid = service_characteristic_pair[i]    
                 # choice = int(input("Enter choice: "))
-                        contents = peripheral.read(service_uuid, characteristic_uuid)
+                        contents = self.peripheral.read(self.service_uuid, self.characteristic_uuid)
                         print(f"Contents: {contents}")
                         # Write the content to the characteristic
                         # Note: `write_request` required the payload to be presented as a bytes object.
                 # Write the content to the characteristic
                         # content = int(input("Type in True or False to turn ON or OFF the LED. "))
-                        while(connect_device):                            
-                            pass
-                        return
+                        keyboard.hook(self.on_key_event)#, peripheral)
+                        # key = partial(self.on_key_event)
+                        LED_on = b'\x01'
+                        LED_off = b'\x00'
+                        while(True): 
+                            if (~connect_device):
+                                print("Safely exiting now")
+                                return                                                    
+                    
                         # content = b'\x00'
                         # # if content == "True" or content == "False":
                         # peripheral.write_request(service_uuid, characteristic_uuid, content) #str.encode(content))
@@ -105,35 +115,58 @@ class RobotController():
         #     self.robot.writeCharacteristic(self.chars[char]+1, b"\x01\x00")
 
         # keyboard.hook(self.on_key_event)
-
-    def on_key_event(self, event):
-        LED_off = b'\x00'
-        # if content == "True" or content == "False":       
-        # else:
-        LED_on = b'\x01'
-                
-        # if a key unrelated to direction keys is pressed, ignore
-        if event.name not in chars: return
-        # if a key is pressed down
-        if event.event_type == keyboard.KEY_DOWN:
-            # if that key is already pressed down, ignore
-            if pressed[event.name]: return
-            # set state of key to pressed
-            pressed[event.name] = True
-            # write enable to direction characteristic
-            peripheral.write_request(service_uuid, characteristic_uuid, LED_off) #str.encode(content))
-        elif event.event_type == keyboard.KEY_UP:
-            if pressed[event.name]: return
-            # set state of key to prd                                          essed
-            pressed[event.name] = True
-            # write enable to direction characteristic
-            peripheral.write_request(service_uuid, characteristic_uuid, LED_on) #str.encode(content))
+    def clear_pressed(self):
+        for i in self.pressed.keys():
+            self.pressed[i]=False
+    
+    def set_pressed(self):
+        for i in self.pressed.keys():
+            self.pressed[i]=True
             
+    def on_key_event(self, event): #, peripheral):
+       
+                
+        if event.name not in ["DOWN", "UP"]:
+            print("Irrelevant key pressed.")
+            return 
+        if self.pressed[event.name]: 
+            print("already pressed")
+            return
+        if event.event_type == keyboard.KEY_DOWN:
+            print("DOWN key pressed")
+            # if that key is already pressed down, ignore
+            
+            # set state of key to pressed
+            self.pressed[event.name] = True
+            # write enable to direction characteristic
+            self.peripheral.write_request(self.service_uuid, self.characteristic_uuid, LED_off) #str.encode(content))
+            self.clear_pressed()
+            return
+            # return 'DOWN'
+        elif event.event_type == keyboard.KEY_UP:
+            print("UP key pressed")
+            
+            # set state of key to prd                                          essed
+            # self.pressed[event.name] = True
+            # write enable to direction characteristic
+            self.peripheral.write_request(service_uuid, characteristic_uuid, LED_on) #str.encode(content))
+            # return 'DOWN'
             # if content == "True" or content == "False":
             # peripheral.write_request(service_uuid, characteristic_uuid, content) #str.encode(content))
+            self.clear_pressed()
+            return
         else:
-            peripheral.disconnect()    
+            # return 'QUIT'
+            print("Irrelevant key pressed")
+            # self.pressed["UP"] = False
+            connect_device = False
+            self.peripheral.disconnect()    
+            print("Disconnecting Now")
+            return 
             # break
-            
+        # contents = self.peripheral.read(self.service_uuid, self.characteristic_uuid)
+        # print(f"Contents: {contents}")
+        # return
 
 robot = RobotController(YOUR_ADDRESS)
+del robot

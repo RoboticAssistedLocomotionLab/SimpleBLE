@@ -122,8 +122,7 @@ class RobotController():
 
 if __name__ == "__main__":
               
-    # choice = int(input("Enter choice: "))
-    # peripheral = peripherals[choice]
+    robot = RobotController(YOUR_ADDRESS)
 
     
 
