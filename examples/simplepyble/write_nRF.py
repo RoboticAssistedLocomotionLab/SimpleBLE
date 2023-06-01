@@ -1,6 +1,7 @@
 import simplepyble
 import keyboard
-from functools import partial
+import time
+
 found_device = False
 
 YOUR_ADDRESS = "c0:98:e5:49:aa:bb" # Replace address with your device address
@@ -10,8 +11,8 @@ CHAR_UUIDS = {"up": "c05899c5-457c-4c75-93ab-e55018bb3073",
         "right": "c05899c7-457c-4c75-93ab-e55018bb3073",
         "left": "c05899c8-457c-4c75-93ab-e55018bb3073",
         "led":"32e68911-2b22-4db5-a914-43ce41986c70"}
+
 LED_off = b'\x00'
- 
 LED_on = b'\x01'
 
 peripherals= []
@@ -19,7 +20,7 @@ service_uuid = []
 characteristic_uuid = []
 class RobotController():
     def __del__(self):
-        print('Destructor called, Employee deleted.')
+        print('Destructor called, Object deleted.')
     def __init__(self, address):
 
         adapters = simplepyble.Adapter.get_adapters()
@@ -82,19 +83,23 @@ class RobotController():
                         contents = self.peripheral.read(self.service_uuid, self.characteristic_uuid)
                         print(f"Contents: {contents}")
                         
-                        keyboard.hook(self.on_key_event)#, peripheral)
+                        #keyboard.hook(self.on_key_event)#, peripheral)
                         # key = partial(self.on_key_event)                        
-                        while(True): 
-                            if (connect_device==False):
-                                print("Safely exiting now")
+                        while(True):
+                            time.sleep(0.3)
+                            try:
+                                if (connect_device==False):
+                                    print("Safely exiting now")
+                                    return
+                                else:
+                                    if keyboard.is_pressed("w"):
+                                        self.peripheral.write_request(self.service_uuid, self.characteristic_uuid, LED_on)
+                                    elif keyboard.is_pressed("s"):
+                                        self.peripheral.write_request(self.service_uuid, self.characteristic_uuid, LED_off)
+                            except KeyboardInterrupt:
+                                print("Interrupted by Ctrl-C")
                                 return
-                            else:
-                                pass                                           
-                    
-
-            # if (found_device==False):
-            #     print("The device in interest was not found")              
-            #     return 
+            
             
                     
     def clear_pressed(self):
